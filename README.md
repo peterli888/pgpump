@@ -1,4 +1,4 @@
 pgpump
 ======
 
-PostgreSQL TCP reverse proxy with failover
+Asynchronous PostgreSQL TCP reverse proxy with failover written in Node.JS
