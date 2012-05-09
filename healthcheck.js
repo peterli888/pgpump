@@ -91,6 +91,8 @@ HealthCheck.prototype.start = function() {
 	  if (count++ >= that.num_retries) {
 	    that.emit('failure');
 	    util.log('[ERROR] Backend ' + that.uri + ' failure');
+	    count = 0;
+	    schedule_probe();
 	  }
 	  else {
 	    schedule_probe();
@@ -98,7 +100,7 @@ HealthCheck.prototype.start = function() {
         }
         else {
 	  count = 0;
-          util.log('[INFO]  Health check to ' + that.uri + ' successful');
+          //util.log('[INFO]  Health check to ' + that.uri + ' successful');
 	  schedule_probe();
         };
       });
