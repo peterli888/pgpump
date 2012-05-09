@@ -7,7 +7,7 @@ Asynchronous PostgreSQL TCP reverse proxy with failover written in Node.JS
 
 pgpump operates on 2 levels:
 - transport level (worker processes) - it forwards TCP packets to configured 
-PostgreSQL backends asynchronously. Asynchronous forwarding makes it pretty fast
+PostgreSQL backends asynchronously. Asynchronous forwarding makes it fast
 even with remote high latency connections. 
 
 - application level (master process) - pgpump constantly queries each PostgreSQL 
@@ -16,8 +16,9 @@ the workers of any role switch that has occurred.
 
 ## Features
 
-- Fast
+- Asynchronous = Fast
 - Automatic master and standby(s) detection
+- Multiple master (split brain) detection
 - Automatic failover/failback (not yet fully tested)
 - Takes advantage of multi core CPUs by spawning <numCPU> workers
 - Configurable timeouts
