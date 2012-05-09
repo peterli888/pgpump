@@ -13,11 +13,11 @@ function HealthCheck(backend, health) {
     this.timeout = 2000;
   };
 
-  if (this.interval < this.timeout+500) {
+  if (this.interval < this.timeout+1000) {
     // set a little bit bigger health check interval
     util.log('[INFO]  Health check interval is smaller then connection timeout!');
     util.log('[INFO]  Setting interval to minimum allowed value');
-    this.interval = this.timeout+500;
+    this.interval = this.timeout+1000;
   };
 }
 
@@ -38,7 +38,7 @@ HealthCheck.prototype.probe = function(callback) {
       that.status = false;
       client.end();
       callback(new Error('Connection probe to ' + that.uri + ' failed - timeout'));
-    }, this.timeout);
+    }, this.timeout+500);
 
     client.on('error', function(err) {
       clearTimeout(that.timerHandle);
@@ -56,9 +56,10 @@ HealthCheck.prototype.probe = function(callback) {
       };
 
       if (row.is_standby) {
-        if (that.master) {
+        if (!that.standby) {
 	  that.master = false;
 	  that.emit('standby');
+	  that.standby = true;
 
           util.log('[INFO]  State change: ' + that.uri + ' is standby');
 	}
@@ -66,8 +67,8 @@ HealthCheck.prototype.probe = function(callback) {
       else {
         if (!that.master) {
           that.master = true;
-          that.emit('master')
-
+          that.emit('master');
+          that.standby = false;
           util.log('[INFO]  State change: ' + that.uri + ' is master');
         }
       };

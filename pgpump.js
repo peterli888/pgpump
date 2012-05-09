@@ -56,13 +56,30 @@ if (cluster.isMaster) {
     // Setup the listeners
     // master signal listener
     backend.healthcheck.on('master', function() {
-      pumpmaster.master = backend;
-      util.log('[INFO]  Elected ' + backend.healthcheck.uri + ' as master');
-      pumpmaster.respawn();
+      if (pumpmaster.master && (backend.healthcheck.uri !== pumpmaster.master.healthcheck.uri)) {
+        pumpmaster.master.healthcheck.probe(function(err) { 
+	  if (err) {
+            pumpmaster.master = backend;
+	    pumpmaster.respawn();
+	    util.log('[INFO]  Switched to new master ' + backend.healthcheck.uri);
+	  }
+	  else {
+	    util.log('[ERROR] Multiple master databases detected');
+	    util.log('[ERROR] Master database is ' + pumpmaster.master.healthcheck.url);
+	    util.log('[ERROR] New master request from ' + backend.healthcheck.url + ' abandoned');
+	    util.log('[ERROR] Please resolve the split brain situation by recovering one of the backends as standby');
+	  }
+        });
+      }
+      else {
+        pumpmaster.master = backend;
+        util.log('[INFO]  Elected ' + backend.healthcheck.uri + ' as master');
+        pumpmaster.respawn();
+      }
     });
 
     // standby signal listener
-    backend.healthcheck.on('slave', function() {
+    backend.healthcheck.on('standby', function() {
       backend.standby = true;
 
       if (pumpmaster.master && (backend.healthcheck.uri === pumpmaster.master.healthcheck.uri)) {
@@ -88,8 +105,7 @@ if (cluster.isMaster) {
 	      }
 	      else {
 	        var ifaces = networkInterfaces(),
-		    ikeys = Object.keys(ifaces),
-		    match = false;
+		    ikeys = Object.keys(ifaces);
 		for (var j = 0; j < ikeys.length; j++) {
 		  if (pumpmaster.backends[j].host === address) {
 		    var now = new Date();
@@ -127,10 +143,8 @@ if (cluster.isMaster) {
     util.log('[INFO]  Master process PID: ' + process.pid + ' shutting down ' + __filename.split('/').pop());
     process.exit(0);
   });
-
 }
 else {
-  
   var worker = new WorkerPump(config.general);
   process.on('message', function(msg) {
     if (msg.master) {
@@ -143,6 +157,5 @@ else {
   process.on('uncaughtException', function (err) {
     util.log('[worker-' + process.pid + '] Caught Uncaught exception: ' + util.inspect(err,true,null,true));
   });
-	  
 };
 
