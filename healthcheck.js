@@ -90,6 +90,8 @@ HealthCheck.prototype.start = function() {
         if (err) {
           util.log('[ERROR] ' + err.message);
 	  if (count++ >= that.num_retries) {
+	    that.standby = false;
+	    that.master = false;
 	    that.emit('failure');
 	    util.log('[ERROR] Backend ' + that.uri + ' failure');
 	    count = 0;

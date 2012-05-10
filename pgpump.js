@@ -1,5 +1,7 @@
 var net = require('net'),
+    fs = require('fs'),
     config = require('./config.js').readconfig('./pgpump.conf'),
+    path = require('path'),
     lookup = require('dns').lookup,
     networkInterfaces = require('os').networkInterfaces,
     util = require('util'),
@@ -46,9 +48,18 @@ PgPump.prototype.respawn = function() {
 }
   
 if (cluster.isMaster) {
-  var pumpmaster = new PgPump(config);
+  var pumpmaster = new PgPump(config),
+      basename = path.basename(__filename,'.js'),
+      pidfile = '/var/run/' + basename + '.pid';
 
-  util.log('[INFO]  Starting up ' + __filename.split('/').pop() + ', master PID=' + process.pid);
+  util.log('[INFO]  Starting up ' + pidfile + ', master PID=' + process.pid);
+  if (path.existsSync(pidfile)) {
+    util.log('[ERROR] PID file ' + pidfile + ' already exists!');
+    util.log('[ERROR] Another ' + basename + ' instance is running or stale PID file');
+    process.exit(1);
+  };
+  // Write PID file
+  fs.writeFileSync(pidfile, process.pid);
   pumpmaster.backends.forEach(function(backend) {
     // Start checks
     backend.healthcheck.start();
@@ -140,8 +151,13 @@ if (cluster.isMaster) {
 
   process.on('SIGTERM', function() {
     cluster.removeAllListeners();
-    util.log('[INFO]  Master process PID: ' + process.pid + ' shutting down ' + __filename.split('/').pop());
+    fs.unlinkSync(pidfile);
+    util.log('[INFO]  Master process PID: ' + process.pid + ' shutting down ' + basename);
     process.exit(0);
+  });
+
+  process.on('uncaughtException', function(err) {
+    util.log('[WARNING] Caught exception: ' + err);
   });
 }
 else {
@@ -154,7 +170,7 @@ else {
       worker.start(msg.master);
     }
   });
-  process.on('uncaughtException', function (err) {
+  process.on('uncaughtException', function(err) {
     util.log('[worker-' + process.pid + '] Caught Uncaught exception: ' + util.inspect(err,true,null,true));
   });
 };
