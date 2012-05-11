@@ -50,16 +50,19 @@ PgPump.prototype.respawn = function() {
 if (cluster.isMaster) {
   var pumpmaster = new PgPump(config),
       basename = path.basename(__filename,'.js'),
-      pidfile = '/var/run/' + basename + '.pid';
+      pidfile = '/var/run/' + basename + '/' + basename + '.pid';
 
-  util.log('[INFO]  Starting up ' + pidfile + ', master PID=' + process.pid);
+
   if (path.existsSync(pidfile)) {
     util.log('[ERROR] PID file ' + pidfile + ' already exists!');
     util.log('[ERROR] Another ' + basename + ' instance is running or stale PID file');
     process.exit(1);
   };
+  //process.setuid(26);
   // Write PID file
   fs.writeFileSync(pidfile, process.pid);
+  // Start
+  util.log('[INFO]  Starting up ' + pidfile + ', master PID=' + process.pid);
   pumpmaster.backends.forEach(function(backend) {
     // Start checks
     backend.healthcheck.start();
@@ -75,6 +78,8 @@ if (cluster.isMaster) {
 	    util.log('[INFO]  Switched to new master ' + backend.healthcheck.uri);
 	  }
 	  else {
+            // Reset per-backend role flag
+            backend.healthcheck.master = false;
 	    util.log('[ERROR] Multiple master databases detected');
 	    util.log('[ERROR] Master database is ' + pumpmaster.master.healthcheck.url);
 	    util.log('[ERROR] New master request from ' + backend.healthcheck.url + ' abandoned');
@@ -103,10 +108,12 @@ if (cluster.isMaster) {
     });
 
     // failure signal listener
-    backend.healthcheck.on('failover', function() {
-      if (backend.healthcheck.uri === pumpmaster.master.healthcheck.uri) {
+    backend.healthcheck.on('failure', function() {
+      util.log('[WARNING] Caught failure signal');
+      if (backend.healthcheck.uri == pumpmaster.master.healthcheck.uri) {
         // Failover
 	var keys = Object.keys(pumpmaster.backends);
+        // TODO: split up this loop in two
 	for (var i = 0, length = keys.length; i < length; i++) {
 	  if (pumpmaster.backends[i].standby) {
 	    // Promote DB here
@@ -118,9 +125,11 @@ if (cluster.isMaster) {
 	        var ifaces = networkInterfaces(),
 		    ikeys = Object.keys(ifaces);
 		for (var j = 0; j < ikeys.length; j++) {
-		  if (pumpmaster.backends[j].host === address) {
+                  console.log(address);
+		  if (ifaces[ikeys[j]].address === address) {
 		    var now = new Date();
 		    writeFileSync('failover', now);
+                    util.log('[INFO]  Promoted ' + pumpmaster.backends[i].uri + ' to master!');
 		    break;
 		  }
 		}
@@ -149,10 +158,15 @@ if (cluster.isMaster) {
     }});
   });
 
-  process.on('SIGTERM', function() {
+  process.once('SIGTERM', function() {
     cluster.removeAllListeners();
-    fs.unlinkSync(pidfile);
     util.log('[INFO]  Master process PID: ' + process.pid + ' shutting down ' + basename);
+    pumpmaster.workers.forEach(function(worker) {
+      process.kill(worker.pid);
+    });
+
+    fs.unlinkSync(pidfile);
+
     process.exit(0);
   });
 
